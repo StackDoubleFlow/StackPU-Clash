@@ -1,8 +1,6 @@
 import Clash.Prelude
 import StackPU.CPU
 
-import Debug.Trace
-
 fib :: Unsigned 8 -> BitVector 8
 -- fib addr | traceShow addr False = undefined
 fib 0 = 0b01011000

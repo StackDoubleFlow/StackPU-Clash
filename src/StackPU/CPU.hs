@@ -2,7 +2,6 @@ module StackPU.CPU where
 
 import Clash.Prelude
 import Clash.Num.Overflowing
-import Debug.Trace
 
 opcode :: BitVector 8 -> BitVector 5
 opcode = slice d7 d3
@@ -69,17 +68,18 @@ regfile addr wrData en = file
     file = regEn (repeat 0) en file'
     file' = replace <$> addr <*> wrData <*> file
 
-(.!) :: (BitPack a) => Signal dom a -> Int -> Signal dom Bit
-(.!) bits idx = liftA2 (!) bits $ pure idx
+branchCond :: BitVector 3 -> Bool -> Bool -> Bool -> Bool
+branchCond oper cout underflow zero = not (coutChk || underflowChk || zeroChk)
+  where
+    checkCond val b = not val && bitToBool (oper ! (b :: Integer))
+    coutChk = checkCond cout 0
+    underflowChk = checkCond underflow 1
+    zeroChk = checkCond zero 2
 
 stackpu :: forall (dom :: Domain). (HiddenClockResetEnable dom) => (Signal dom (Unsigned 8) -> Signal dom (BitVector 8)) -> Signal dom (Unsigned 8)
 stackpu insMem = acc
   where
-    condChk = not <$> (coutChk .||. underflowChk .||. zeroChk)
-      where
-        coutChk = not <$> cout .&&. (bitToBool <$> oper .! 0)
-        underflowChk = bitToBool <$> ((.&.) <$> aluOut .! 7 <*> oper .! 1)
-        zeroChk = not <$> zero .&&. (bitToBool <$> oper .! 2)
+    condChk = branchCond <$> oper <*> cout <*> underflow <*> zero
     branching = (op .==. pure Jmp) .&&. condChk
     pc = register 0 $ mux disableDecode (unpack <$> insOrImm) (pc + 1)
 
@@ -106,3 +106,4 @@ stackpu insMem = acc
     aluB = mux useImm (unpack <$> insOrImm) $ (!!) <$> regData <*> regIdx
     (aluOut, cout) = unbundle $ alu <$> op <*> aluA <*> aluB
     zero = (== 0) <$> aluOut
+    underflow = bitToBool <$> ((!) <$> aluOut <*> pure (7 :: Integer))
