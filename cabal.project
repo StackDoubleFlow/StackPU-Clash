@@ -1,0 +1,4 @@
+packages:
+  stackpu.cabal
+
+write-ghc-environment-files: always
